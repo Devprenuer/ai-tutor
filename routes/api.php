@@ -17,3 +17,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::get('/question', 'App\Http\Controllers\Api\QuestionController@question')
+    ->name('api.question.getQuestion');

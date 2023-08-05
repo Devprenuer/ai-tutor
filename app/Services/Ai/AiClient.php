@@ -1,7 +1,8 @@
 <?php namespace App\Services\Ai;
 
-use OpenAI;
+use OpenAI\Client as OpenAI;
 use App\Services\Ai\Prompt\PromptInterface;
+use App\Services\Ai\Response\ResponseHandlerInterface;
 
 class AiClient
 {
@@ -12,7 +13,7 @@ class AiClient
         $this->client = $openai;
     }
 
-    public function chat(PromptInterface $prompt, callable $callback): mixed
+    public function chat(PromptInterface $prompt, ResponseHandlerInterface $handler): mixed
     {
         // Combine the prompts into an array of message arrays
         $messages = $prompt->getMessages();
@@ -26,6 +27,8 @@ class AiClient
             'messages' => $messages
         ]);
 
-        return $callback($response);
+        return $handler->extractPayload(
+            $response
+        );
     }
 }

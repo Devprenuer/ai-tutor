@@ -15,8 +15,8 @@ class QuestionPrompt implements PromptInterface
            $this->setTopic($params['topic']);
         }
 
-        if (isset($params['difficulty'])) {
-           $this->setDifficulty($params['difficulty']);
+        if (isset($params['difficulty_level'])) {
+           $this->setDifficultyLevel($params['difficulty_level']);
         }
 
         if (isset($params['industry'])) {
@@ -34,8 +34,8 @@ class QuestionPrompt implements PromptInterface
             throw new InvalidArgumentException('Topic is required (Hint: use the setTopic() method or pass it in the constructor)))');
         }
 
-        if (!isset($this->params->difficulty)) {
-            throw new InvalidArgumentException('Difficulty is required (Hint: use the setDifficulty() method or pass it in the constructor)))');
+        if (!isset($this->params->difficulty_level)) {
+            throw new InvalidArgumentException('difficulty_level is required (Hint: use the setDifficultyLevel() method or pass it in the constructor)))');
         }
 
         if (!isset($this->params->industry)) {
@@ -55,9 +55,9 @@ class QuestionPrompt implements PromptInterface
         return $this;
     }
 
-    public function setDifficulty(int $difficulty): QuestionPrompt
+    public function setDifficultyLevel(int $difficulty_level): QuestionPrompt
     {
-        $this->params->difficulty = $difficulty;
+        $this->params->difficulty_level = $difficulty_level;
         return $this;
     }
 
@@ -100,7 +100,7 @@ class QuestionPrompt implements PromptInterface
         $this->validateParams();
 
         return <<<EOT
-Please generate a {$this->params->difficulty} level {$this->params->industry} question about {$this->params->topic}.
+Please generate a {$this->params->difficulty_level} level {$this->params->industry} question about {$this->params->topic}.
 EOT;
     }
 
@@ -110,19 +110,18 @@ EOT;
 
         return <<<EOT
 You are a chat assistant api that generates {$this->params->industry} questions
-at incresing levels of difficulty ranging from 1 to 10. 10 being the most difficult.
+at incresing levels of difficulty_level ranging from 1 to 10. 10 being the most difficult.
 You return questions in json format where the `question` key contains the question
-the `difficulty` key contains the difficulty level and the `topic` key contains the topic.
-Before the question json in your response, you say 'QUESTION:' and after the question json
-you say '.END'. For example, if the user prompt was: "{$this->getUserPrompt()}" the system prompt would be
+the `difficulty_level` key contains the difficulty_level level and the `topic` key contains the topic.
+For example, if the user prompt was: "{$this->getUserPrompt()}" the system prompt would be
 something like this:
-QUESTION:{
+{
     "question": "...",
-    "difficulty": {$this->params->difficulty},
+    "difficulty_level": {$this->params->difficulty_level},
     "topic": "{$this->params->topic}"
-}.END
+}
 Even though you accept user prompts in plain text, you return questions in json format. If the user
-prompt is "next" you return the next question in the series.
+prompt is "next" you return a new question.
 EOT;
     }
 
@@ -150,11 +149,11 @@ EOT;
                 $previousQuestionMessages[] = [
                     'role' => 'assistant',
                     'content' => <<<EOT
-QUESTION:{
+{
     "question": "{$previousQuestion['question']}",
-    "difficulty": {$previousQuestion['difficulty']},
+    "difficulty_level": {$previousQuestion['difficulty_level']},
     "topic": "{$previousQuestion['topic']}"
-}.END
+}
 EOT
                 ];
 
