@@ -23,12 +23,15 @@ class QuestionController extends Controller
         $this->user = $request->user();
 
         $request->validate([
-            'topic' => 'required|string|exists:topics,id',
-            'difficulty_level' => 'required|integer|between:1,10'
+            'topic_id' => 'required|string|exists:topics,id',
+            'difficulty_level' => 'required|integer|between:1,10',
+            'page' => 'nullable|integer|min:1'
         ]);
 
+        $page = $request->query('page', 1);
+
         $topic = Topic::find(
-            $request->query('topic')
+            $request->query('topic_id')
         );
 
         $difficultyLevel = $request->query('difficulty_level');
@@ -39,10 +42,11 @@ class QuestionController extends Controller
         $question = Question::whereNotViewedByUser($this->user->id)
             ->where('topic_id', $topic->id)
             ->where('difficulty_level', $difficultyLevel)
-            ->limit(1)
-            ->skip($page || 0)
+            ->skip($page - 1)
+            ->take(1)
+            ->orderBy('created_at', 'desc')
             ->get()
-            ->last();
+            ->first();
 
         if ($question) {
             $question->addViewByUser($this->user->id);
