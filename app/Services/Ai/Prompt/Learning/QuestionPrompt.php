@@ -127,7 +127,7 @@ EOT;
 
     public function getUserNextQuestionPrompt(): string
     {
-        return 'next';
+        return "next question, same topic and difficulty_level";
     }
 
     public function getChatHistoryMessages(): array
@@ -152,7 +152,7 @@ EOT;
 {
     "question": "{$previousQuestion['question']}",
     "difficulty_level": {$previousQuestion['difficulty_level']},
-    "topic": "{$previousQuestion['topic']}"
+    "topic": "{$this->params->topic}"
 }
 EOT
                 ];

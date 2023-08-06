@@ -9,6 +9,7 @@ use App\Services\Ai\Prompt\Learning\QuestionPrompt;
 use App\Services\Ai\Response\JsonResponseHandler;
 use App\Models\Topic;
 use App\Models\Question;
+use App\Models\UserQuestionView;
 
 class QuestionController extends Controller
 {
@@ -19,6 +20,8 @@ class QuestionController extends Controller
 
     public function question(Request $request)
     {
+        $this->user = $request->user();
+
         $request->validate([
             'topic' => 'required|string|exists:topics,id',
             'difficulty_level' => 'required|integer|between:1,10'
@@ -33,34 +36,34 @@ class QuestionController extends Controller
         // fetch all questions from database under topic 
         // matching the difficulty level, excluding those previously asked
         // to the current user.      
-        $question = $topic
-            ->questions
+        $question = Question::whereNotViewedByUser($this->user->id)
+            ->where('topic_id', $topic->id)
             ->where('difficulty_level', $difficultyLevel)
-            // TODO exclude previously asked questions
+            ->limit(1)
+            ->skip($page || 0)
+            ->get()
             ->last();
 
         if ($question) {
+            $question->addViewByUser($this->user->id);
             return response()->json([
                 'question' => $question
             ]);
         }
 
-
         $prompt = new QuestionPrompt([
             'topic' => $topic->topic,
             'difficulty_level' => $difficultyLevel,
             'industry' => $topic->industry->industry,
-            // TODO fetch previous questions from database
-            // send previous questions to prompt
-            /*
-            'previous_questions' => [
-                [
-                    'question' => 'What is a variable?',
-                    'topic' => 'PHP',
-                    'difficulty_level' => 1
-                ]
-            ],
-            */
+            'previous_questions' => Question::whereViewedByUser($this->user->id)
+                ->where('topic_id', $topic->id)
+                ->where('difficulty_level', $difficultyLevel)
+                // TODO think of a better way to do this
+                // all these questions are being sent to the AI
+                // which is not ideal
+                ->limit(50)
+                ->get()
+                ->toArray()
         ]);
 
         $questionData = $this->aiClient->chat(
@@ -72,6 +75,8 @@ class QuestionController extends Controller
             'difficulty_level' => $questionData->difficulty_level,
             'topic_id' => $topic->id
         ]);
+
+        $question->addViewByUser($this->user->id);
 
         return response()->json([
             'question' => $question
