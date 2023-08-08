@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use App\Models\Industry;
+use App\Models\Topic;
 
 class DatabaseSeeder extends Seeder
 {
@@ -12,11 +14,37 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // \App\Models\User::factory(10)->create();
+        $industry = $this->createIndustry();
+        $this->createTopics($industry->id);
+    }
 
-        // \App\Models\User::factory()->create([
-        //     'name' => 'Test User',
-        //     'email' => 'test@example.com',
-        // ]);
+    public function createIndustry()
+    {
+        return Industry::create([
+            'industry' => 'Coding',
+        ]);
+    }
+
+    public function createTopics($industry_id)
+    {
+        Topic::create([
+            'topic' => 'PHP',
+            'industry_id' => $industry_id,
+        ]);
+
+        Topic::create([
+            'topic' => 'Javscript',
+            'industry_id' => $industry_id,
+        ]);
+
+        Topic::create([
+            'topic' => 'Python',
+            'industry_id' => $industry_id,
+        ]);
+
+        Topic::create([
+            'topic' => 'Rust',
+            'industry_id' => $industry_id,
+        ]);
     }
 }
