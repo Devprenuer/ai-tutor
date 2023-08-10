@@ -6,9 +6,12 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Services\Ai\AiClient;
 use App\Services\Ai\Prompt\Learning\QuestionPrompt;
+use App\Services\Ai\Prompt\Learning\HintsPrompt;
 use App\Services\Ai\Response\JsonResponseHandler;
+use Illuminate\Http\JsonResponse;
 use App\Models\Topic;
 use App\Models\Question;
+use App\Models\Hint;
 use App\Models\UserQuestionView;
 
 class QuestionController extends Controller
@@ -18,7 +21,7 @@ class QuestionController extends Controller
         $this->aiClient = $aiClient;
     }
 
-    public function question(Request $request)
+    public function question(Request $request): JsonResponse
     {
         $this->user = $request->user();
 
@@ -84,6 +87,54 @@ class QuestionController extends Controller
 
         return response()->json([
             'question' => $question
+        ]);
+    }
+
+
+    public function questionHint(Request $request, $question_id): JsonResponse
+    {
+        $request->validate([
+            'page' => 'nullable|integer|min:1'
+        ]);
+
+        $page = $request->query('page', 1);
+
+        $question = Question::findOrFail(
+            $question_id
+        );
+
+        $hint = Hint::where('question_id', $question->id)
+            ->skip($page - 1)
+            ->take(1)
+            ->orderBy('created_at', 'asc')
+            ->orderBy('helpfulness_level', 'asc')
+            ->get()
+            ->first();
+
+        if ($hint) {
+            return response()->json([
+                'hint' => $hint
+            ]);
+        }
+
+        $prompt = new HintsPrompt([
+            'question' => $question->question
+        ]);
+
+        $hintData = $this->aiClient->chat(
+            $prompt, new JsonResponseHandler()
+        );
+
+        for ($i = 0; $i < count($hintData); $i++) {
+            $hintData[$i] = Hint::create([
+                'hint' => $hintData[$i]->hint,
+                'helpfulness_level' => $hintData[$i]->helpfulness_level,
+                'question_id' => $question->id
+            ]);
+        }
+
+        return response()->json([
+            'hint' => $hintData[$page - 1]
         ]);
     }
 }

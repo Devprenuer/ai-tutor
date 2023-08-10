@@ -23,4 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/question', [QuestionController::class, 'question'])
         ->name('api.question.getQuestion');
+    
+    Route::get('/question/{question_id}/hint', [QuestionController::class, 'questionHint'])
+        ->name('api.question.getHint');
 });
