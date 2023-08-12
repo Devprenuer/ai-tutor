@@ -6,24 +6,25 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Traits\HasViewCount;
+use App\Models\Question;
 
-class Question extends Model
+class Hint extends Model
 {
     use HasFactory, HasViewCount;
 
     protected $fillable = [
-        'question',
-        'difficulty_level',
-        'topic_id',
+        'hint',
+        'question_id',
+        'helpfulness_level'
     ];
 
     public static function getViewModelClassName(): string
     {
-        return UserQuestionView::class;
+        return UserHintView::class;
     }
 
-    public function topic(): BelongsTo
+    public function question(): BelongsTo
     {
-        return $this->belongsTo(Topic::class);
+        return $this->belongsTo(Question::class);
     }
 }

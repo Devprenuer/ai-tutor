@@ -3,6 +3,8 @@
 use App\Models\User;
 use App\Models\Topic;
 use App\Models\Question;
+use App\Models\Hint;
+use App\Models\UserHintView;
 use App\Models\UserQuestionView;
 use Tests\TestCase;
 use App\Services\Ai\AiClient;
@@ -16,17 +18,17 @@ class QuestionControllerTest extends TestCase {
 
     use RefreshDatabase;
 
-    private function mockChat(array $returning): Mockery\MockInterface {
+    private function mockChat($returning): Mockery\MockInterface {
         // mock Open AI
         return $this->mock(AiClient::class, function ($mock) use ($returning) {
             return $mock->shouldReceive('chat')
                 ->once()
-                ->andReturn((object) $returning);
+                ->andReturn($returning);
         });
     }
 
     private function fetchQuestionAsUser(User $user, Topic $topic, int $difficultyLevel, int $page = null, bool $mock = true): TestResponse {
-        $expectedQuestion = [
+        $expectedQuestion = (object) [
             'question' => self::TEST_QUESTION,
             'difficulty_level' => $difficultyLevel,
             'topic_id' => $topic->id
@@ -38,6 +40,17 @@ class QuestionControllerTest extends TestCase {
         
         $response = $this->actingAs($user)
             ->getJson("/api/question?topic_id={$topic->id}&difficulty_level={$difficultyLevel}&page={$page}");
+
+        return $response;
+    }
+
+    private function fetchHintAsUser(User $user, $questionId, $page = 1, array $mockHints = []): TestResponse {
+        if (!empty($mockHints)) {
+            $this->mockChat($mockHints);
+        }
+
+        $response = $this->actingAs($user)
+            ->getJson("/api/question/{$questionId}/hint?page={$page}");
 
         return $response;
     }
@@ -80,6 +93,8 @@ class QuestionControllerTest extends TestCase {
             'user_id' => $user->id,
             'question_id' => $question['id']
         ]);
+
+        $this->assertEquals(1, Question::find($question['id'])->view_count);
     }
 
     public function test_fetches_questions_from_database_at_matching_difficulty_and_topic_if_they_exist(): void
@@ -147,6 +162,96 @@ class QuestionControllerTest extends TestCase {
             ->orderBy('created_at', 'desc')
             ->get()[1];
         $this->assertSame($question['id'], $expectedQuestion['id']);
+    }
+
+    public function test_question_hints_from_database_when_exist(): void
+    {
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+        $difficultyLevel = 1;
+        $question = Question::factory()->create([
+            'difficulty_level' => $difficultyLevel,
+            'topic_id' => $topic->id
+        ]);
+
+        $hints = [];
+        
+        for ($i = 0; $i < 10; $i++) {
+            $hints[] = Hint::factory()->create([
+                'question_id' => $question->id,
+                'helpfulness_level' => $i + 1
+            ]);
+        }
+
+        $response = $this->fetchHintAsUser($user, $question->id, 2);
+        $hint = $response->json('hint');
+
+        $this->assertEquals($hints[1]->id, $hint['id']);
+    
+        $response = $this->fetchHintAsUser($user, $question->id, 3);
+        $hint = $response->json('hint');
+
+        $this->assertEquals($hints[2]->id, $hint['id']);
+    }
+
+    public function test_generates_new_hints_using_ai_if_none_in_db_on_the_first_request_and_returns_given_page(): void
+    {
+        $user = User::factory()->create();
+        $question = Question::factory()->create();
+
+        $hints = [];
+        
+        for ($i = 0; $i < 10; $i++) {
+            $hints[] = Hint::factory()->make([
+                'question_id' => $question->id,
+                'helpfulness_level' => $i + 1
+            ]);
+        }
+
+        for ($i = 2; $i <= 10; $i++) {
+            // only mock hints on the first page
+            // subsequent pages will be loaded from the database
+            // start from page two to validate that the page number is being used
+            // on the first request
+            $hints = $i === 2 ? $hints : [];
+            $response = $this->fetchHintAsUser($user, $question->id, $i, $hints);
+            $hint = $response->json('hint');
+
+            $firstHint = Hint::where('question_id', $question->id)
+                ->skip($i - 1)
+                ->take(1)
+                ->orderBy('created_at', 'asc')
+                ->orderBy('helpfulness_level', 'asc')
+                ->get()
+                ->first();
+            
+            $this->assertEquals($firstHint->id, $hint['id']);
+        }
+    }
+
+
+    public function test_question_hints_adds_user_view_on_request(): void
+    {
+        $user = User::factory()->create();
+
+        $hint = Hint::factory()->create();
+
+        $this->assertDatabaseMissing('user_hint_views', [
+            'user_id' => $user->id,
+            'hint_id' => $hint->id
+        ]);
+
+        $this->assertEquals(0, Hint::find($hint->id)->view_count);
+
+        $response = $this->fetchHintAsUser($user, $hint->question->id, 1);
+        
+        $hint = Hint::first();
+        $this->assertDatabaseHas('user_hint_views', [
+            'user_id' => $user->id,
+            'hint_id' => $hint->id
+        ]);
+
+        $this->assertEquals(1, Hint::find($hint->id)->view_count);
     }
     
 }
