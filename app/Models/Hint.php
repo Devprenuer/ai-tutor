@@ -4,11 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Traits\HasViewCount;
 use App\Models\Question;
 
 class Hint extends Model
 {
-    use HasFactory;
+    use HasFactory, HasViewCount;
 
     protected $fillable = [
         'hint',
@@ -16,7 +18,12 @@ class Hint extends Model
         'helpfulness_level'
     ];
 
-    public function question()
+    public static function getViewModelClassName(): string
+    {
+        return UserHintView::class;
+    }
+
+    public function question(): BelongsTo
     {
         return $this->belongsTo(Question::class);
     }

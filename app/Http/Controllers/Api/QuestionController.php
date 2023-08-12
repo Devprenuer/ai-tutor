@@ -110,8 +110,14 @@ class QuestionController extends Controller
             ->orderBy('helpfulness_level', 'asc')
             ->get()
             ->first();
+        
+        $user = $request->user();
 
         if ($hint) {
+            if (!$hint->viewedByUser($user->id)) {
+                $hint->addViewByUser($user->id);
+            }
+
             return response()->json([
                 'hint' => $hint
             ]);
