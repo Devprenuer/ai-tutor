@@ -23,6 +23,10 @@ class QuestionPrompt implements PromptInterface
            $this->setIndustry($params['industry']);
         }
 
+        if (isset($params['question_type'])) {
+            $this->setQuestionType($params['question_type']);
+        }
+
         if (isset($params['previous_questions'])) {
            $this->setPreviousQuestions($params['previous_questions']);
         }
@@ -41,11 +45,21 @@ class QuestionPrompt implements PromptInterface
         if (!isset($this->params->industry)) {
             throw new InvalidArgumentException('Industry is required (Hint: use the setIndustry() method or pass it in the constructor)))');
         }
+
+        if (!isset($this->params->question_type)) {
+            throw new InvalidArgumentException('question_type is required (Hint: use the setQuestionType() method or pass it in the constructor)))');
+        }
     }
 
     public function setPreviousQuestions(array $previousQuestions): QuestionPrompt
     {
         $this->params->previousQuestions = $previousQuestions;
+        return $this;
+    }
+
+    public function setQuestionType(string $questionType): QuestionPrompt
+    {
+        $this->params->question_type = $questionType;
         return $this;
     }
 
@@ -100,7 +114,8 @@ class QuestionPrompt implements PromptInterface
         $this->validateParams();
 
         return <<<EOT
-Please generate a {$this->params->difficulty_level} level {$this->params->industry} question about {$this->params->topic}.
+Please generate a difficulty level {$this->params->difficulty_level} {$this->params->question_type}
+{$this->params->industry} question about {$this->params->topic}.
 EOT;
     }
 
@@ -109,25 +124,39 @@ EOT;
         $this->validateParams();
 
         return <<<EOT
-You are a chat assistant api that generates {$this->params->industry} questions
-at incresing levels of difficulty_level ranging from 1 to 10. 10 being the most difficult.
-You return questions in json format where the `question` key contains the question
-the `difficulty_level` key contains the difficulty_level level and the `topic` key contains the topic.
-For example, if the user prompt was: "{$this->getUserPrompt()}" the system prompt would be
-something like this:
-{
-    "question": "...",
-    "difficulty_level": {$this->params->difficulty_level},
-    "topic": "{$this->params->topic}"
-}
-Even though you accept user prompts in plain text, you return questions in json format. If the user
-prompt is "next" you return a new question.
+You are a json api that generates {$this->params->industry} questions
+at difficulty range 1 to 10. 10 most difficult.
+Your response matches the schema below. Ex:
+user: "{$this->getUserPrompt()}"
+you: "{$this->getSystemExampleJsonResponse()}"
+user: "{$this->getUserNextQuestionPrompt()}"
+you: (new question same difficulty)
 EOT;
+    }
+
+    public function getSystemExampleJsonResponse(): string
+    {
+        $json = [
+            'question' => '...',
+            'difficulty_level' => $this->params->difficulty_level
+        ];
+
+        if ($this->params->question_type === 'Multiple Choice') {
+            $json['options'] = [
+                'a' => '...',
+                'b' => '...',
+                'c' => '...',
+                'd' => '...'
+            ];
+            $json['answer'] = 'a';
+        }
+
+        return json_encode($json);
     }
 
     public function getUserNextQuestionPrompt(): string
     {
-        return "next question, same topic and difficulty_level";
+        return "next";
     }
 
     public function getChatHistoryMessages(): array
@@ -146,22 +175,27 @@ EOT;
                     'content' => $userPrompt
                 ];
 
+                $questionJson = [
+                    'question' => $previousQuestion['question'],
+                    'difficulty_level' => $previousQuestion['difficulty_level']
+                ];
+
+                if (isset($previousQuestion['multiple_choice_options']) && $previousQuestion['multiple_choice_options']) {
+                    $questionJson['options'] = $previousQuestion['multiple_choice_options'];
+                    $questionJson['answer'] = $previousQuestion['multiple_choice_answer'];
+                }
+
                 $previousQuestionMessages[] = [
                     'role' => 'assistant',
-                    'content' => <<<EOT
-{
-    "question": "{$previousQuestion['question']}",
-    "difficulty_level": {$previousQuestion['difficulty_level']},
-    "topic": "{$this->params->topic}"
-}
-EOT
+                    'content' => json_encode($questionJson)
                 ];
 
                 $i++;
             }
+
+            return $previousQuestionMessages;
         }
-        return $previousQuestionMessages;
+
+        return [];
     }
 }
-
-

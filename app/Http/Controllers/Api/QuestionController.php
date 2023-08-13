@@ -28,10 +28,15 @@ class QuestionController extends Controller
         $request->validate([
             'topic_id' => 'required|string|exists:topics,id',
             'difficulty_level' => 'required|integer|between:1,10',
+            'question_type' => 'integer|in:0,1', // only support multiple choice for now
             'page' => 'nullable|integer|min:1'
         ]);
 
         $page = $request->query('page', 1);
+        $questionType = (int) $request->query(
+            'question_type',
+            Question::QUESTION_TYPES['MULTIPLE_CHOICE']['ID']
+        );
 
         $topic = Topic::find(
             $request->query('topic_id')
@@ -45,6 +50,7 @@ class QuestionController extends Controller
         $question = Question::whereNotViewedByUser($this->user->id)
             ->where('topic_id', $topic->id)
             ->where('difficulty_level', $difficultyLevel)
+            ->where('question_type', $questionType)
             ->skip($page - 1)
             ->take(1)
             ->orderBy('created_at', 'desc')
@@ -62,14 +68,17 @@ class QuestionController extends Controller
             'topic' => $topic->topic,
             'difficulty_level' => $difficultyLevel,
             'industry' => $topic->industry->industry,
+            'question_type' => Question::questionTypeById($questionType)['TITLE'],
             'previous_questions' => Question::whereViewedByUser($this->user->id)
                 ->where('topic_id', $topic->id)
                 ->where('difficulty_level', $difficultyLevel)
+                ->where('question_type', $questionType)
                 // TODO think of a better way to do this
                 // all these questions are being sent to the AI
                 // which is not ideal
                 ->limit(50)
                 ->get()
+                ->makeVisible('multiple_choice_answer')
                 ->toArray()
         ]);
 
@@ -77,11 +86,19 @@ class QuestionController extends Controller
             $prompt, new JsonResponseHandler()
         );
 
-        $question = Question::create([
+        $question = Question::make([
             'question' => $questionData->question,
             'difficulty_level' => $questionData->difficulty_level,
-            'topic_id' => $topic->id
+            'topic_id' => $topic->id,
+            'question_type' => $questionType
         ]);
+
+        if ($questionType === Question::QUESTION_TYPES['MULTIPLE_CHOICE']['ID'] && isset($questionData->options)) {
+            $question->multiple_choice_options = $questionData->options;
+            $question->multiple_choice_answer = $questionData->answer;
+        }
+
+        $question->save();
 
         $question->addViewByUser($this->user->id);
 

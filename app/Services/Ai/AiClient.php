@@ -22,8 +22,10 @@ class AiClient
             throw new \Exception("No messages were provided to the AI client. Please check your prompt {get_class($prompt)}.");
         }
 
+        // var_dump($messages); die;
+
         $response = $this->client->chat()->create([
-            'model' => 'gpt-3.5-turbo',
+            'model' => 'gpt-4',
             'messages' => $messages
         ]);
 

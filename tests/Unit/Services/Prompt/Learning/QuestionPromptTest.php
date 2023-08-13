@@ -4,6 +4,7 @@ namespace Tests\Unit\Services\Prompt\Learning;
 
 use PHPUnit\Framework\TestCase;
 use App\Services\Ai\Prompt\Learning\QuestionPrompt;
+use App\Models\Question;
 
 class QuestionPromptTest extends TestCase
 {
@@ -16,10 +17,10 @@ class QuestionPromptTest extends TestCase
             'topic' => 'PHP',
             'difficulty_level' => 1,
             'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
             'previous_questions' => [
                 [
                     'question' => 'What is a variable?',
-                    'topic' => 'PHP',
                     'difficulty_level' => 1
                 ]
             ],
@@ -32,7 +33,6 @@ class QuestionPromptTest extends TestCase
         $this->assertEquals([
             [
                 'question' => 'What is a variable?',
-                'topic' => 'PHP',
                 'difficulty_level' => 1
             ]
         ], $params->previousQuestions);
@@ -44,10 +44,10 @@ class QuestionPromptTest extends TestCase
         $qp->setTopic('PHP');
         $qp->setDifficultyLevel(1);
         $qp->setIndustry('Web Development');
+        $qp->setQuestionType(Question::QUESTION_TYPES['CODING']['TITLE']);
         $qp->setPreviousQuestions([
             [
                 'question' => 'What is a variable?',
-                'topic' => 'PHP',
                 'difficulty_level' => 1
             ]
         ]);
@@ -59,7 +59,6 @@ class QuestionPromptTest extends TestCase
         $this->assertEquals([
             [
                 'question' => 'What is a variable?',
-                'topic' => 'PHP',
                 'difficulty_level' => 1
             ]
         ], $params->previousQuestions);
@@ -73,6 +72,7 @@ class QuestionPromptTest extends TestCase
         $qp = new QuestionPrompt([
             'difficulty_level' => 1,
             'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
             'previous_questions' => [
                 [
                     'question' => 'What is a variable?',
@@ -93,6 +93,7 @@ class QuestionPromptTest extends TestCase
         $qp = new QuestionPrompt([
             'topic' => 'PHP',
             'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
             'previous_questions' => [
                 [
                     'question' => 'What is a variable?',
@@ -113,6 +114,28 @@ class QuestionPromptTest extends TestCase
         $qp = new QuestionPrompt([
             'topic' => 'PHP',
             'difficulty_level' => 1,
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
+            'previous_questions' => [
+                [
+                    'question' => 'What is a variable?',
+                    'topic' => 'PHP',
+                    'difficulty_level' => 1
+                ]
+            ],
+        ]);
+
+        $qp->getMessages();
+    }
+
+    public function test_exception_thrown_on_get_messages_when_question_type_not_set(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('question_type is required (Hint: use the setQuestionType() method or pass it in the constructor)))');
+
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
             'previous_questions' => [
                 [
                     'question' => 'What is a variable?',
@@ -131,6 +154,7 @@ class QuestionPromptTest extends TestCase
             'topic' => 'PHP',
             'difficulty_level' => 1,
             'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
             'previous_questions' => [
                 [
                     'question' => 'What is a variable?',
@@ -153,13 +177,10 @@ class QuestionPromptTest extends TestCase
             ],
             [
                 'role' => 'assistant',
-                'content' => <<<EOT
-{
-    "question": "What is a variable?",
-    "difficulty_level": 1,
-    "topic": "PHP"
-}
-EOT
+                'content' => json_encode([
+                    'question' => 'What is a variable?',
+                    'difficulty_level' => 1
+                ])
             ],
             [
                 'role' => 'user',
@@ -167,15 +188,195 @@ EOT
             ],
             [
                 'role' => 'assistant',
-                'content' => <<<EOT
-{
-    "question": "What is a class?",
-    "difficulty_level": 1,
-    "topic": "PHP"
-}
-EOT
+                'content' => json_encode([
+                    'question' => 'What is a class?',
+                    'difficulty_level' => 1
+                ])
             ],
         ], $chatHistory);
+    }
+
+    public function test_get_chat_history_previous_questions_includes_multiple_choice_options(): void
+    {
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['MULTIPLE_CHOICE']['TITLE'],
+            'previous_questions' => [
+                [
+                    'question' => 'What is a variable?',
+                    'topic' => 'PHP',
+                    'difficulty_level' => 1,
+                    'multiple_choice_options' => [
+                        'a' => 'A variable is a container for a value.',
+                        'b' => 'A variable is a container for a function.',
+                        'c' => 'A variable is a container for a class.',
+                        'd' => 'A variable is a container for a namespace.',
+                    ],
+                    'multiple_choice_answer' => 'a'
+                ],
+                [
+                    'question' => 'What is a class?',
+                    'topic' => 'PHP',
+                    'difficulty_level' => 1,
+                    'multiple_choice_options' => [
+                        'a' => 'A class is a container for a value.',
+                        'b' => 'A class is a container for a function.',
+                        'c' => 'A class is a container for a class.',
+                        'd' => 'A class is a container for a namespace.',
+                    ],
+                    'multiple_choice_answer' => 'c'
+                ]
+            ],
+        ]);
+
+        $chatHistory = $qp->getChatHistoryMessages();
+        $this->assertEquals([
+            [
+                'role' => 'user',
+                'content' => $qp->getUserPrompt()
+            ],
+            [
+                'role' => 'assistant',
+                'content' => json_encode([
+                    'question' => 'What is a variable?',
+                    'difficulty_level' => 1,
+                    'options' => [
+                        'a' => 'A variable is a container for a value.',
+                        'b' => 'A variable is a container for a function.',
+                        'c' => 'A variable is a container for a class.',
+                        'd' => 'A variable is a container for a namespace.',
+                    ],
+                    'answer' => 'a'
+                ])
+            ],
+            [
+                'role' => 'user',
+                'content' => $qp->getUserNextQuestionPrompt()
+            ],
+            [
+                'role' => 'assistant',
+                'content' => json_encode([
+                    'question' => 'What is a class?',
+                    'difficulty_level' => 1,
+                    'options' => [
+                        'a' => 'A class is a container for a value.',
+                        'b' => 'A class is a container for a function.',
+                        'c' => 'A class is a container for a class.',
+                        'd' => 'A class is a container for a namespace.',
+                    ],
+                    'answer' => 'c'
+                ])
+            ],
+        ], $chatHistory);
+    }
+
+    public function test_system_example_json_response_returns_expected_content(): void
+    {
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
+        ]);
+
+        $expected = json_encode([
+            'question' => '...',
+            'difficulty_level' => 1
+        ]);
+
+        $this->assertEquals(
+            $expected, $qp->getSystemExampleJsonResponse()
+        );
+    }
+
+    public function test_system_example_json_response_returns_expected_content_with_multiple_choice(): void
+    {
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['MULTIPLE_CHOICE']['TITLE'],
+        ]);
+
+        $expected = json_encode([
+            'question' => '...',
+            'difficulty_level' => 1,
+            'options' => [
+                'a' => '...',
+                'b' => '...',
+                'c' => '...',
+                'd' => '...',
+            ],
+            'answer' => 'a'
+        ]);
+
+        $this->assertEquals(
+            $expected, $qp->getSystemExampleJsonResponse()
+        );
+    }
+
+    public function test_user_prompts_contain_expected_text(): void
+    {
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
+        ]);
+
+        $expected = <<<EOT
+Please generate a difficulty level 1 Coding
+Web Development question about PHP.
+EOT;
+        $this->assertEquals(
+            $expected, $qp->getUserPrompt()
+        );
+
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['MULTIPLE_CHOICE']['TITLE'],
+        ]);
+
+        $expected = <<<EOT
+Please generate a difficulty level 1 Multiple Choice
+Web Development question about PHP.
+EOT;
+        $this->assertEquals(
+            $expected, $qp->getUserPrompt()
+        );
+
+        $this->assertEquals(
+            'next', $qp->getUserNextQuestionPrompt()
+        );
+    }
+
+
+    public function test_system_prompt_returns_expected_content(): void
+    {
+        $qp = new QuestionPrompt([
+            'topic' => 'PHP',
+            'difficulty_level' => 1,
+            'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
+        ]);
+
+        $expected = <<<EOT
+You are a json api that generates Web Development questions
+at difficulty range 1 to 10. 10 most difficult.
+Your response matches the schema below. Ex:
+user: "{$qp->getUserPrompt()}"
+you: "{$qp->getSystemExampleJsonResponse()}"
+user: "{$qp->getUserNextQuestionPrompt()}"
+you: (new question same difficulty)
+EOT;
+
+        $this->assertEquals(
+           $expected, $qp->getSystemPrompt()
+        );
     }
 
     public function test_messages_returned(): void
@@ -184,6 +385,7 @@ EOT
             'topic' => 'PHP',
             'difficulty_level' => 1,
             'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
         ]);
 
         $messages = $qp->getMessages();
@@ -205,10 +407,10 @@ EOT
             'topic' => 'PHP',
             'difficulty_level' => 1,
             'industry' => 'Web Development',
+            'question_type' => Question::QUESTION_TYPES['CODING']['TITLE'],
             'previous_questions' => [
                 [
                     'question' => 'What is a variable?',
-                    'topic' => 'PHP',
                     'difficulty_level' => 1
                 ]
             ],

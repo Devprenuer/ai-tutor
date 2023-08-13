@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('questions', function (Blueprint $table) {
-            $table->integer('view_count')->default(0);
+            $table->json('multiple_choice_options')->nullable();
+            $table->string('multiple_choice_answer')->nullable();
+            $table->integer('question_type')->nullable();
         });
     }
 
@@ -21,8 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('questions', function (Blueprint $table) {
-            $table->dropColumn('view_count');
+        Schema::table('question', function (Blueprint $table) {
+            $table->dropColumn('multiple_choice_options');
+            $table->dropColumn('multiple_choice_answer');
+            $table->dropColumn('question_type');
         });
     }
 };
