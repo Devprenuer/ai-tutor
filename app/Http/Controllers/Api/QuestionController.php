@@ -93,7 +93,11 @@ class QuestionController extends Controller
             'question_type' => $questionType
         ]);
 
-        if ($questionType === Question::QUESTION_TYPES['MULTIPLE_CHOICE']['ID'] && isset($questionData->options)) {
+        if ($questionType === Question::QUESTION_TYPES['MULTIPLE_CHOICE']['ID']) {
+            if (!isset($questionData->options) || !isset($questionData->answer)) {
+                throw new \Exception('There was an error processing the question. Please try again.');
+            }
+
             $question->multiple_choice_options = $questionData->options;
             $question->multiple_choice_answer = $questionData->answer;
         }

@@ -16,6 +16,13 @@ class QuestionControllerTest extends TestCase {
 
     const TEST_QUESTION = 'What is the meaning of life?';
 
+    const TEST_QUESTION_MULTIPLE_CHOICES = [
+        'a' => 1,
+        'b' => 2,
+        'c' => 3,
+        'd' => 4
+    ];
+
     use RefreshDatabase;
 
     private function mockChat($returning): Mockery\MockInterface {
@@ -27,32 +34,53 @@ class QuestionControllerTest extends TestCase {
         });
     }
 
-    private function fetchQuestionAsUser(User $user, Topic $topic, int $difficultyLevel, int $page = null, bool $mock = true): TestResponse {
-        $expectedQuestion = (object) [
-            'question' => self::TEST_QUESTION,
-            'difficulty_level' => $difficultyLevel,
-            'topic_id' => $topic->id
-        ];
+    private function fetchQuestionAsUser(User $user, array $params): TestResponse {
+        $params = array_merge([
+            'page' => 1,
+            'mock' => false,
+            'dump' => false,
+            'question' => (object) Question::factory()->make([
+                'question' => self::TEST_QUESTION,
+                'question_type' => 0
+            ])->toArray()
+        ], $params);
 
-        if ($mock) {
-            $this->mockChat($expectedQuestion);
+        $question = $params['question'];
+
+        if (@$params['dump']) {
+            //var_dump($question->difficulty_level, 'expected');
+        }
+
+        if ($params['mock']) {
+            $this->mockChat($question);
         }
         
         $response = $this->actingAs($user)
-            ->getJson("/api/question?topic_id={$topic->id}&difficulty_level={$difficultyLevel}&page={$page}");
+            ->getJson("/api/question?topic_id={$question->topic_id}&difficulty_level={$question->difficulty_level}&page={$params['page']}&question_type={$question->question_type}&dump={$params['dump']}");
 
         return $response;
     }
 
-    private function fetchHintAsUser(User $user, $questionId, $page = 1, array $mockHints = []): TestResponse {
-        if (!empty($mockHints)) {
-            $this->mockChat($mockHints);
+    private function fetchHintAsUser(User $user, array $params): TestResponse {
+        $params = array_merge([
+            'question_id' => 1,
+            'page' => 1,
+            'mock_hints' => []
+        ], $params);
+        if (!empty($params['mock_hints'])) {
+            $this->mockChat($params['mock_hints']);
         }
 
         $response = $this->actingAs($user)
-            ->getJson("/api/question/{$questionId}/hint?page={$page}");
+            ->getJson("/api/question/{$params['question_id']}/hint?page={$params['page']}");
 
         return $response;
+    }
+
+    public function setUp(): void
+    {
+        putenv('OPENAI_API_KEY=mock_key');
+        parent::setUp();
     }
 
     public function test_fetching_question_requires_authentication(): void
@@ -66,27 +94,109 @@ class QuestionControllerTest extends TestCase {
     {
         $user = User::factory()->create();
         $topic = Topic::factory()->create();
-        $difficultyLevel = 1;
+        Question::factory()->create([
+            'difficulty_level' => 1,
+            'topic_id' => $topic->id,
+            'question_type' => 0
+        ]);
 
-        $response = $this->fetchQuestionAsUser($user, $topic, $difficultyLevel);
+        $expectedQuestion = Question::factory()->make([
+            'difficulty_level' => 2,
+            'topic_id' => $topic->id,
+            'question_type' => 0
+        ]);
+
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => $expectedQuestion,
+            'mock' => true
+        ]);
 
         $response->assertStatus(200);
         $response->assertJsonCount(1);
 
         $question = $response->json('question');
-        $this->assertSame($question['question'], self::TEST_QUESTION);
-        $this->assertSame($question['difficulty_level'], $difficultyLevel);
+        $this->assertSame($question['question'], $expectedQuestion->question);
+        $this->assertSame($question['difficulty_level'], 2);
         $this->assertSame($question['topic_id'], $topic->id);
+        $this->assertSame($question['question_type'], 0);
         $this->assertNotNull($question['id']);
+    }
+
+    public function test_when_questions_dont_exist_in_topic_of_type_they_are_generated_by_ai(): void
+    {
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+        Question::factory()->create([
+            'difficulty_level' => 2,
+            'topic_id' => $topic->id,
+            'question_type' => 0
+        ]);
+
+        $expectedQuestion = (object) Question::factory()->make([
+            'difficulty_level' => 2,
+            'topic_id' => $topic->id,
+            'question_type' => 1
+        ])->toArray();
+
+        $expectedQuestion->options = self::TEST_QUESTION_MULTIPLE_CHOICES;
+        $expectedQuestion->answer = 'a';
+
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => $expectedQuestion,
+            'mock' => true
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonCount(1);
+
+        $question = $response->json('question');
+        $this->assertSame($question['question'], $expectedQuestion->question);
+        $this->assertSame($question['difficulty_level'], 2);
+        $this->assertSame($question['topic_id'], $topic->id);
+        $this->assertSame($question['question_type'], 1);
+        $this->assertSame($question['multiple_choice_options'], self::TEST_QUESTION_MULTIPLE_CHOICES);
+        $this->assertNotNull($question['id']);
+
+        $this->assertDatabaseHas('questions', [
+            'id' => $question['id'],
+            'question' => $expectedQuestion->question,
+            'difficulty_level' => 2,
+            'topic_id' => $topic->id,
+            'question_type' => 1,
+            'multiple_choice_options' => json_encode(self::TEST_QUESTION_MULTIPLE_CHOICES),
+            'multiple_choice_answer' => 'a'
+        ]);
+    }
+
+    public function test_fails_with_500_when_multiple_choice_types_dont_have_options_or_answers(): void
+    {
+        $user = User::factory()->create();
+        $expectedQuestion = (object) Question::factory()->make([
+            'difficulty_level' => 2,
+            'question_type' => 1
+        ])->toArray();
+
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => $expectedQuestion,
+            'mock' => true
+        ]);
+
+        $response->assertStatus(500);
     }
 
     public function test_adds_user_view_on_returned_question(): void
     {
         $user = User::factory()->create();
-        $topic = Topic::factory()->create();
-        $difficultyLevel = 1;
+        $question = Question::factory()->make([
+            'difficulty_level' => 1,
+            'question_type' => 0
+        ]);
 
-        $response = $this->fetchQuestionAsUser($user, $topic, $difficultyLevel, null, false);
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => $question,
+            'mock' => true
+        ]);
+
         $question = $response->json('question');
 
         $this->assertDatabaseHas('user_question_views', [
@@ -100,12 +210,16 @@ class QuestionControllerTest extends TestCase {
     public function test_fetches_questions_from_database_at_matching_difficulty_and_topic_if_they_exist(): void
     {
         $user = User::factory()->create();
-        $expectedQuestion = Question::factory()->create();
-        $topic = $expectedQuestion->topic;
+        $expectedQuestion = Question::factory()->create([
+            'question_type' => 0,
+            'difficulty_level' => 1
+        ]);
 
-        $difficultyLevel = $expectedQuestion->difficulty_level;
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => $expectedQuestion,
+            'mock' => false
+        ]);
 
-        $response = $this->fetchQuestionAsUser($user, $topic, $difficultyLevel, null, false);
         $question = $response->json('question');
 
         $this->assertSame($question['question'], $expectedQuestion['question']);
@@ -122,20 +236,24 @@ class QuestionControllerTest extends TestCase {
 
         $questions = Question::factory(3)->create([
             'difficulty_level' => $difficultyLevel,
-            'topic_id' => $topic->id
+            'topic_id' => $topic->id,
+            'question_type' => 0
         ]);
 
         $questions->each(function ($question) use ($user) {
             $question->addViewByUser($user->id);
         });
 
-        $expectedQuestion = [
-            'question' => self::TEST_QUESTION,
+        $expectedQuestion = Question::factory()->make([
             'difficulty_level' => $difficultyLevel,
             'topic_id' => $topic->id
-        ];
+        ]);
 
-        $response = $this->fetchQuestionAsUser($user, $topic, $difficultyLevel);
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => (object) $expectedQuestion->toArray(),
+            'mock' => true
+        ]);
+
         $question = $response->json('question');
 
         // assert that the question returned is not in the original array of questions
@@ -153,10 +271,18 @@ class QuestionControllerTest extends TestCase {
         $difficultyLevel = 1;
         $questions = Question::factory(4)->create([
             'difficulty_level' => $difficultyLevel,
-            'topic_id' => $topic->id
+            'topic_id' => $topic->id,
+            'question_type' => 0
         ]);
 
-        $response = $this->fetchQuestionAsUser($user, $topic, $difficultyLevel, 2, false);
+        $response = $this->fetchQuestionAsUser($user, [
+            'question' => (object) [
+                'difficulty_level' => $difficultyLevel,
+                'topic_id' => $topic->id,
+                'question_type' => 0
+            ],
+            'page' => 2
+        ]);
         $question = $response->json('question');
         $expectedQuestion = Question::query()
             ->orderBy('created_at', 'desc')
@@ -171,7 +297,8 @@ class QuestionControllerTest extends TestCase {
         $difficultyLevel = 1;
         $question = Question::factory()->create([
             'difficulty_level' => $difficultyLevel,
-            'topic_id' => $topic->id
+            'topic_id' => $topic->id,
+            'question_type' => 0
         ]);
 
         $hints = [];
@@ -183,12 +310,19 @@ class QuestionControllerTest extends TestCase {
             ]);
         }
 
-        $response = $this->fetchHintAsUser($user, $question->id, 2);
+        $response = $this->fetchHintAsUser($user, [
+            'question_id' => $question->id,
+            'page' => 2
+        ]);
+
         $hint = $response->json('hint');
 
         $this->assertEquals($hints[1]->id, $hint['id']);
     
-        $response = $this->fetchHintAsUser($user, $question->id, 3);
+        $response = $this->fetchHintAsUser($user, [
+            'question_id' => $question->id,
+            'page' => 3
+        ]);
         $hint = $response->json('hint');
 
         $this->assertEquals($hints[2]->id, $hint['id']);
@@ -197,7 +331,9 @@ class QuestionControllerTest extends TestCase {
     public function test_generates_new_hints_using_ai_if_none_in_db_on_the_first_request_and_returns_given_page(): void
     {
         $user = User::factory()->create();
-        $question = Question::factory()->create();
+        $question = Question::factory()->create([
+            'question_type' => 0
+        ]);
 
         $hints = [];
         
@@ -214,7 +350,11 @@ class QuestionControllerTest extends TestCase {
             // start from page two to validate that the page number is being used
             // on the first request
             $hints = $i === 2 ? $hints : [];
-            $response = $this->fetchHintAsUser($user, $question->id, $i, $hints);
+            $response = $this->fetchHintAsUser($user, [
+                'question_id' => $question->id,
+                'page' => $i,
+                'mock_hints' => $hints
+            ]);
             $hint = $response->json('hint');
 
             $firstHint = Hint::where('question_id', $question->id)
@@ -243,7 +383,10 @@ class QuestionControllerTest extends TestCase {
 
         $this->assertEquals(0, Hint::find($hint->id)->view_count);
 
-        $response = $this->fetchHintAsUser($user, $hint->question->id, 1);
+        $response = $this->fetchHintAsUser($user, [
+            'question_id' => $hint->question_id,
+            'page' => 1
+        ]);
         
         $hint = Hint::first();
         $this->assertDatabaseHas('user_hint_views', [
