@@ -94,10 +94,10 @@ set as the `Authentication: Bearer <token>` request header.
 
 ### Api/Question
 
-Generate new questions in the api by requesting the following api endpoint
+#### Generate new questions in the api by requesting the following api endpoint
 
 ```
-/api/question?topic_id=<id>&difficulty_level=<num:1..10>
+GET /api/question?topic_id=<id>&difficulty_level=<num:1..10>
 ```
 
 Response Example:
@@ -114,6 +114,40 @@ Response Example:
     }
 }
 ```
+
+#### Generate a multiple choice question
+
+```
+GET /api/question?topic_id=<id>&difficulty_level=<num:1..10>&question_type=1
+```
+
+
+Response Example:
+
+```
+{
+    question: {
+        id: 1,
+        question: 'write a php variable named duck with the value 1',
+        difficulty_level: 1,
+        topic_id: <topic_id>,
+        multiple_choice_options: {
+            a: "answer 1",
+            b: "answer 2",
+            c: "answer 3",
+            d: "answer 4
+        },
+        multiple_choice_answer: "a",
+        created_at: 'UTC-date',
+        updated_at: 'UTC-date'
+    }
+}
+```
+
+##### Question Types
+
+Coding: 0 
+Multiple Choice: 1 (Now Default)
 
 
 ## Testing
