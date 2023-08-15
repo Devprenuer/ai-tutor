@@ -39,6 +39,15 @@ Trait HasViewCount
         return $this->views()->where('user_id', $userId)->exists();
     }
 
+    public function getMostRecentViewByUser($userId)
+    {
+        return $this->views()
+            ->take(1)
+            ->where('user_id', $userId)
+            ->latest()
+            ->first();
+    }
+
     public function views()
     {
         return $this->hasMany($this->getViewModelClassName());

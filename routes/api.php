@@ -15,15 +15,21 @@ use Illuminate\Support\Facades\Route;
 */
 
 use App\Http\Controllers\Api\QuestionController;
+use App\Http\Controllers\Api\AnswerController;
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
 
-    Route::get('/question', [QuestionController::class, 'question'])
+    Route::group(['prefix' => 'question'], function () {
+        Route::get('/', [QuestionController::class, 'question'])
         ->name('api.question.getQuestion');
     
-    Route::get('/question/{question_id}/hint', [QuestionController::class, 'questionHint'])
-        ->name('api.question.getHint');
+        Route::get('/{question_id}/hint', [QuestionController::class, 'questionHint'])
+            ->name('api.question.getHint');
+    
+        Route::post('/{question_id}/answer', [AnswerController::class, 'answerQuestion'])
+            ->name('api.question.answer');
+    });
 });
