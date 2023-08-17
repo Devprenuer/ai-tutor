@@ -68,7 +68,7 @@ class AnswerController extends Controller
             // is not supported
             return response()->json([
                 'message' => $e->getMessage()
-            ], 400);
+            ], 403);
         }
     }
 }

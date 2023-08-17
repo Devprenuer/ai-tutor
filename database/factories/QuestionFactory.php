@@ -27,4 +27,20 @@ class QuestionFactory extends Factory
             'question_type' => Question::QUESTION_TYPES['CODING']['ID'],
         ];
     }
+
+    public function multipleChoice(): self
+    {
+        return $this->state(function (array $attributes) {
+            return [
+                'question_type' => Question::QUESTION_TYPES['MULTIPLE_CHOICE']['ID'],
+                'multiple_choice_options' => json_encode([
+                    'a' => fake()->sentence(),
+                    'b' => fake()->sentence(),
+                    'c' => fake()->sentence(),
+                    'd' => fake()->sentence(),
+                ]),
+                'multiple_choice_answer' => fake()->randomElement(['a', 'b', 'c', 'd'])
+            ];
+        });
+    }
 }
