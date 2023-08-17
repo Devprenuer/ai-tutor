@@ -47,7 +47,7 @@ class QuestionController extends Controller
         // fetch all questions from database under topic 
         // matching the difficulty level, excluding those previously asked
         // to the current user.      
-        $question = Question::whereNotViewedByUser($this->user->id)
+        $question = Question::notViewedByUser($this->user->id)
             ->where('topic_id', $topic->id)
             ->where('difficulty_level', $difficultyLevel)
             ->where('question_type', $questionType)

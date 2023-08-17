@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use App\Models\Traits\HasViewCount;
+use App\Models\Lessons;
 
 class Question extends Model
 {
@@ -50,5 +51,10 @@ class Question extends Model
     public function topic(): BelongsTo
     {
         return $this->belongsTo(Topic::class);
+    }
+
+    public function lessons()
+    {
+        return $this->belongsToMany(Lesson::class, 'lesson_questions');
     }
 }

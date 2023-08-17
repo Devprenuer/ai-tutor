@@ -85,12 +85,12 @@ Trait HasViewCount
         ];
     }
 
-    public static function whereNotViewedByUser($userId)
+    public static function scopeNotViewedByUser($query, $userId)
     {
         $viewTable = self::getViewModelTableName();
         $table = self::getModelTableName();
 
-        return static::whereNotExists(function($query) use ($userId, $table, $viewTable) {
+        return $query->whereNotExists(function($query) use ($userId, $table, $viewTable) {
             $query->selectRaw(1)
                 ->from($viewTable->plural)
                 ->whereColumn("{$table->plural}.id", "{$table->singular}_id")
@@ -98,12 +98,12 @@ Trait HasViewCount
         });
     }
 
-    public static function whereViewedByUser($userId)
+    public static function scopeViewedByUser($query, $userId)
     {
         $viewTable = self::getViewModelTableName();
         $table = self::getModelTableName();
 
-        return static::whereExists(function($query) use ($userId, $table, $viewTable) {
+        return $query->whereExists(function($query) use ($userId, $table, $viewTable) {
             $query->selectRaw(1)
                 ->from($viewTable->plural)
                 ->whereColumn("{$table->plural}.id", "{$table->singular}_id")
