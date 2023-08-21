@@ -21,7 +21,9 @@ class LessonFactory extends Factory
         return [
             'title' => fake()->sentence(),
             'body' => fake()->paragraph(),
+            'excerpt' => fake()->sentence(),
             'topic_id' => Topic::factory()->create()->id,
+            'difficulty_level' => fake()->numberBetween(1, 10),
         ];
     }
 }

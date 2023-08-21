@@ -2,10 +2,8 @@
 
 use App\Models\User;
 use App\Models\Topic;
-use App\Models\Question;
-use App\Models\Hint;
-use App\Models\UserHintView;
-use App\Models\UserQuestionView;
+use App\Models\Lesson;
+use App\Models\UserLessonView;
 use Tests\TestCase;
 use App\Services\Ai\AiClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -13,6 +11,8 @@ use Illuminate\Testing\TestResponse;
 use Mockery;
 
 class LessonControllerTest extends TestCase {
+
+    use RefreshDatabase;
 
     public function test_requires_authentication()
     {
@@ -22,7 +22,26 @@ class LessonControllerTest extends TestCase {
 
     public function test_fetches_lessons_in_topic_and_difficulty()
     {
-        // create a topic
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+
+        $lessons = Lesson::factory()->count(3)->create([
+            'topic_id' => $topic->id,
+            'difficulty_level' => 1,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $topic->id,
+                'difficulty' => 1,
+            ]));
+
+        $response->assertOk();
+
+        $jsonLessons = $response->json('lessons');
+
+        $this->assertCount(3, $jsonLessons);
+        $this->assertEquals($lessons->pluck('id')->toArray(), array_column($jsonLessons, 'id'));
     }
 
     public function test_fetches_lessons_in_topic_and_difficulty_with_pagination()
@@ -66,7 +85,10 @@ class LessonControllerTest extends TestCase {
 
         $this->assertEquals(0, $lesson->view_count);
 
-        $this->getJson(route('api.lesson.show', $lesson->id));
+        $user = User::factory()->create();
+        $this
+            ->actingAs($user)
+            ->getJson(route('api.lesson.show', $lesson->id));
 
         $this->assertEquals(1, $lesson->refresh()->view_count);
     }
