@@ -38,7 +38,6 @@ class QuestionControllerTest extends TestCase {
         $params = array_merge([
             'page' => 1,
             'mock' => false,
-            'dump' => false,
             'question' => (object) Question::factory()->make([
                 'question' => self::TEST_QUESTION,
                 'question_type' => 0
@@ -47,16 +46,12 @@ class QuestionControllerTest extends TestCase {
 
         $question = $params['question'];
 
-        if (@$params['dump']) {
-            //var_dump($question->difficulty_level, 'expected');
-        }
-
         if ($params['mock']) {
             $this->mockChat($question);
         }
         
         $response = $this->actingAs($user)
-            ->getJson("/api/question?topic_id={$question->topic_id}&difficulty_level={$question->difficulty_level}&page={$params['page']}&question_type={$question->question_type}&dump={$params['dump']}");
+            ->getJson("/api/question?topic_id={$question->topic_id}&difficulty_level={$question->difficulty_level}&page={$params['page']}&question_type={$question->question_type}");
 
         return $response;
     }

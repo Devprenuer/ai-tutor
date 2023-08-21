@@ -36,6 +36,13 @@ Trait HasViewCount
 
     public function viewedByUser($userId): bool
     {
+        // if it has no views, it hasn't been viewed
+        // by the user
+        if ($this->view_count === 0) {
+            return false;
+        }
+
+        // else query views table
         return $this->views()->where('user_id', $userId)->exists();
     }
 
@@ -90,12 +97,14 @@ Trait HasViewCount
         $viewTable = self::getViewModelTableName();
         $table = self::getModelTableName();
 
-        return $query->whereNotExists(function($query) use ($userId, $table, $viewTable) {
-            $query->selectRaw(1)
-                ->from($viewTable->plural)
-                ->whereColumn("{$table->plural}.id", "{$table->singular}_id")
-                ->where('user_id', $userId);
-        });
+        return $query
+            ->where('view_count', '=', 0)
+            ->orWhereNotExists(function($query) use ($userId, $table, $viewTable) {
+                $query->selectRaw(1)
+                    ->from($viewTable->plural)
+                    ->whereColumn("{$table->plural}.id", "{$table->singular}_id")
+                    ->where('user_id', $userId);
+            });
     }
 
     public static function scopeViewedByUser($query, $userId)
@@ -103,11 +112,13 @@ Trait HasViewCount
         $viewTable = self::getViewModelTableName();
         $table = self::getModelTableName();
 
-        return $query->whereExists(function($query) use ($userId, $table, $viewTable) {
-            $query->selectRaw(1)
-                ->from($viewTable->plural)
-                ->whereColumn("{$table->plural}.id", "{$table->singular}_id")
-                ->where('user_id', $userId);
-        });
+        return $query
+            ->where('view_count', '>', 0)
+            ->whereExists(function($query) use ($userId, $table, $viewTable) {
+                $query->selectRaw(1)
+                    ->from($viewTable->plural)
+                    ->whereColumn("{$table->plural}.id", "{$table->singular}_id")
+                    ->where('user_id', $userId);
+            });
     }
 }

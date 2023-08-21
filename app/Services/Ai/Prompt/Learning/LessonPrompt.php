@@ -80,10 +80,12 @@ EOT;
 
         return <<<EOT
 ou are an AI that generates a single {$this->params->topic} lesson{$questionPrompt}.
-Include examples and exercises in html format with <pre> tags for code, <p> for text etc...
+Include examples in html format with <pre> tags for code, <p> for text etc...
+escape html special characters and encode entities (ex: `<` should be encoded as `&lt;`).
+Escape newlines characters and other special characters (ex: `\n` should be encoded as `\\n`).
 Title should not use prefix such as "Lesson Topic: " or "Lesson Topic - ".
 Lesson must include a short plain text excerpt 1-2 sentences long.
-Lesson should be in json format:
+Lesson should be in valid json format:
 {
     "title": "(ex: Loops in Python)",
     "excerpt": "plain text",

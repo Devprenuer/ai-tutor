@@ -21,7 +21,7 @@ class LessonResource extends JsonResource
             'difficulty_level' => $this->difficulty_level,
             'created_at' => $this->created_at,
             'view_count' => $this->view_count,
-            'link' => route('lesson.show', $this->id) .'?' .http_build_query($request->query()),
+            'link' => route('api.lesson.show', $this->id) .'?' .http_build_query($request->query()),
         ];
 
         if (isset($this->body)) {

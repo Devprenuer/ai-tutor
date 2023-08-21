@@ -18,6 +18,7 @@ class Lesson extends Model
         'title',
         'body',
         'excerpt',
+        'difficulty_level',
         'topic_id'
     ];
 
@@ -42,7 +43,7 @@ class Lesson extends Model
 
     public function scopeNextRecord($query, Lesson $lesson, array $params)
     {
-        $currentCreatedAt = $lession->created_at;
+        $currentCreatedAt = $lesson->created_at;
         $currentDifficulty = $lesson->difficulty_level;
         $createdAtDirection = $params['created_at_direction'] ?? 'desc';
         $difficultyLevelDirection = $params['difficulty_level_direction'] ?? 'asc';
@@ -50,10 +51,13 @@ class Lesson extends Model
 
         if ($direction === 'next') {
             $createdAtOperator = $createdAtDirection === 'desc' ? '<' : '>';
-            $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '<' : '>';
+            $createdAtOrder = $createdAtDirection === 'desc' ? 'desc' : 'asc';
+            $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '<=' : '>=';
         } elseif ($direction === 'prev') {
             $createdAtOperator = $createdAtDirection === 'desc' ? '>' : '<';
-            $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '>' : '<';
+            $createdAtOrder = $createdAtDirection === 'desc' ? 'asc' : 'desc';
+            $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '>=' : '<=';
+            $difficultyLevelDirection = $difficultyLevelDirection === 'desc' ? 'asc' : 'desc';
         } else {
             throw new InvalidArgumentException('Invalid direction, must be "next" or "prev"');
         }
@@ -65,10 +69,13 @@ class Lesson extends Model
                 $createdAtOperator,
                 $difficultyLevelOperator,
             ) {
-                $query->where('difficulty_level', '=', $currentDifficulty)
+                $query
                     ->where('created_at', $createdAtOperator, $currentCreatedAt)
-                    ->orWhere('difficulty_level', $difficultyLevelOperator, $currentDifficulty);
+                    ->where('difficulty_level', $difficultyLevelOperator, $currentDifficulty);
             })
+            ->limit(1)
+            ->orderBy('difficulty_level', $difficultyLevelDirection)
+            ->orderBy('created_at', $createdAtOrder);
     }
 
     public function scopeNext($query, Lesson $lesson, array $params)
@@ -80,7 +87,7 @@ class Lesson extends Model
             ]);
     }
 
-    public function scopePrev($query, $currentCreatedAt, $currentDifficulty)
+    public function scopePrev($query, Lesson $lesson, array $params)
     {
         return $query
             ->nextRecord($lesson, [
@@ -89,7 +96,8 @@ class Lesson extends Model
             ]);
     }
 
-    public function scopeSearch($builder, array $params) {
+    public function scopeSearch($builder, array $params)
+    {
         $questionIds = $params['question_ids'] ?? [];
         $topicId = $params['topic_id'] ?? null;
 
@@ -123,7 +131,22 @@ class Lesson extends Model
         }
 
         $difficultyLevel = $params['difficulty_level'] ?? null;
-        if ($difficultyLevel) {
+        $growDifficulty = $params['growing_difficulty'] ?? false;
+        $difficultyLevelDirection = $params['difficulty_level_direction'] ?? 'asc';
+
+        if ($difficultyLevelDirection) {
+            if ($difficultyLevelDirection !== 'asc' && $difficultyLevelDirection !== 'desc') {
+                throw new InvalidArgumentException('Invalid difficulty_level_direction');
+            }
+            $lessonQuery = $lessonQuery
+                ->orderBy('difficulty_level', $difficultyLevelDirection);
+        }
+
+        if ($growDifficulty && $difficultyLevelDirection && $difficultyLevel) {
+            $difficultyLevelOperator = $difficultyLevelDirection === 'asc' ? '>=' : '<=';
+            $lessonQuery = $lessonQuery
+                ->where('difficulty_level', $difficultyLevelOperator, $difficultyLevel);
+        } else if ($difficultyLevel) {
             $lessonQuery = $lessonQuery
                 ->where('difficulty_level', $difficultyLevel);
         }
@@ -134,12 +157,27 @@ class Lesson extends Model
                 ->where('title', 'like', '%' . $query . '%');
         }
 
-        $difficultyLevelDirection = $params['difficulty_level_direction'] ?? 'asc';
         $createdAtDirection = $params['created_at_direction'] ?? 'desc';
+        if ($createdAtDirection !== 'asc' && $createdAtDirection !== 'desc') {
+            throw new InvalidArgumentException('Invalid created_at_direction');
+        }
+
+        $lessonQuery = $lessonQuery
+            ->orderBy('created_at', $createdAtDirection);
 
         return $lessonQuery
-            ->select('id', 'title', 'excerpt', 'difficulty_level', 'created_at', 'view_count')
-            ->orderBy('created_at', $createdAtDirection)
-            ->orderBy('difficulty_level', $difficultyLevelDirection);
+            ->select(
+                'id',
+                'title',
+                'excerpt',
+                'difficulty_level',
+                'created_at',
+                'view_count'
+            );
+    }
+
+    public function getLinkAttribute()
+    {
+        return route('api.lesson.show', $this->id);
     }
 }

@@ -3,7 +3,10 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\User;
+use App\Models\Question;
+use App\Services\Ai\Prompt\Learning\LessonPrompt;
+use App\Services\Ai\AiClient;
+use App\Services\Ai\Response\JsonResponseHandler;
 
 class GenerateLessons extends Command
 {
@@ -36,11 +39,51 @@ class GenerateLessons extends Command
             return;
         }
 
-        // input the user email
-        $userEmail = $this->ask('Enter your email');
-        $user = User::where('email', $userEmail)->first();
+        $questions = Question::whereIn('id', $questionIds)
+            ->with('lessons', 'topic')
+            ->get();
 
-        var_dump($user);
-        return;
+        if (count($questions) !== count($questionIds)) {
+            $this->error('Some questions were not found');
+            return;
+        }
+
+        $client = app(AiClient::class);
+        $responseHandler = new JsonResponseHandler();
+
+        foreach ($questions as $question) {
+            if ($question->lessons->count()) {
+                $this->info("Skipping question {$question->id} as it already has lessons");
+                continue;
+            }
+
+            $this->info("Generating lessons for question {$question->id}...");
+            // start timer
+            $start = microtime(true);
+            $prompt = new LessonPrompt(
+                [
+                    'question' => $question->question,
+                    'topic' => $question->topic->topic,
+                ]
+            );
+            $this->info("Question: {$question->question}");
+            $this->info("Topic: {$question->topic->topic}");
+
+            $lesson = $client->chat(
+                $prompt,
+                $responseHandler
+            );
+
+            $this->info("Lesson loaded: '{$lesson->title}' adding to database...");
+            $question->lessons()->create([
+                'title' => $lesson->title,
+                'body' => $lesson->body,
+                'excerpt' => $lesson->excerpt,
+                'difficulty_level' => $question->difficulty_level,
+                'topic_id' => $question->topic_id
+            ]);
+            $milliseconds = round((microtime(true) - $start) * 1000);
+            $this->info("Lesson added to database in {$milliseconds}ms");
+        }
     }
 }
