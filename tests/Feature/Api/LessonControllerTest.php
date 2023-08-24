@@ -23,10 +23,19 @@ class LessonControllerTest extends TestCase {
     public function test_fetches_lessons_in_topic_and_difficulty()
     {
         $user = User::factory()->create();
-        $topic = Topic::factory()->create();
-
+        $topics = Topic::factory()->count(2)->create();
+        $topic = $topics[0];
+        $topic2 = $topics[1];
+    
         $lessons = Lesson::factory()->count(3)->create([
             'topic_id' => $topic->id,
+            'difficulty_level' => 1,
+        ]);
+
+        // create some lessons in a different topic
+        // to make sure they are not included in the response
+        Lesson::factory()->count(2)->create([
+            'topic_id' => $topic2->id,
             'difficulty_level' => 1,
         ]);
 
@@ -46,22 +55,165 @@ class LessonControllerTest extends TestCase {
 
     public function test_fetches_lessons_in_topic_and_difficulty_with_pagination()
     {
-        // create a topic
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+
+        $lessons = Lesson::factory()->count(19)->create([
+            'topic_id' => $topic->id,
+            'difficulty_level' => 2,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $topic->id,
+                'difficulty' => 2,
+                'page' => 1,
+            ]));
+
+        $response->assertOk();
+        $lessonResponse = $response->json('lessons');
+        $this->assertCount(10, $lessonResponse);
+        // expect descending created_at order by default
+        $this->assertEquals(
+            $lessons
+                ->sortByDesc('created_at')
+                ->take(10)
+                ->pluck('id')
+                ->toArray(),
+            array_column($lessonResponse, 'id')
+        );
+
+        // get page 2
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $topic->id,
+                'difficulty_level' => 2,
+                'page' => 2,
+            ]));
+        
+        $response->assertOk();
+        $lessonResponse = $response->json('lessons');
+        $this->assertCount(9, $lessonResponse);
+        // expect descending created_at order by default
+        $this->assertEquals(
+            $lessons
+                ->sortByDesc('created_at')
+                ->skip(10)
+                ->pluck('id')
+                ->toArray(),
+            array_column($lessonResponse, 'id')
+        );
     }
 
-    public function test_fetches_lessons_in_topic_and_difficulty_with_pagination_and_sorting()
+    public function test_fetches_lessons_with_created_at_sorting_direction()
     {
-        // create a topic
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+
+        $lessons = Lesson::factory()->count(19)->create([
+            'topic_id' => $topic->id,
+            'difficulty_level' => 2,
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $topic->id,
+                'difficulty_level' => 2,
+                'page' => 2,
+                'created_at_order' => 'asc',
+            ]));
+
+        $response->assertOk();
+        $lessonResponse = $response->json('lessons');
+        $this->assertCount(9, $lessonResponse);
+        // expect descending created_at order by default
+        $this->assertEquals(
+            $lessons
+                ->sortBy('created_at')
+                ->skip(10)
+                ->take(10)
+                ->pluck('id')
+                ->toArray(),
+            array_column($lessonResponse, 'id')
+        );
     }
 
-    public function test_fetches_lessons_in_topic_and_difficulty_with_pagination_and_sorting_direction()
+    public function test_fetches_lessons_with_difficulty_level_sorting()
     {
-        // create a topic
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+
+        for ($i = 0; $i < 20; $i++) {
+            Lesson::factory()->create([
+                'topic_id' => $topic->id,
+                'difficulty_level' => $i + 1,
+            ]);
+        }
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $topic->id,
+                'difficulty_level' => 2,
+                'page' => 2,
+                'growing_difficulty' => true
+            ]));
+
+        $response->assertOk();
+        $lessonResponse = $response->json('lessons');
+        $this->assertCount(9, $lessonResponse);
+        // expect descending created_at order by default
+        $this->assertEquals(
+            Lesson::query()
+                ->skip(10)
+                ->take(10)
+                ->where('difficulty_level', '>=', 2)
+                ->orderBy('difficulty_level', 'asc')
+                ->pluck('id')
+                ->toArray(),
+            array_column($lessonResponse, 'id')
+        );
     }
 
-    public function test_fetches_lessons_in_topic_and_difficulty_with_pagination_and_sorting_direction_and_search()
+    public function test_fetches_lessons_matching_search_query()
     {
-        // create a topic
+        $user = User::factory()->create();
+        $topic = Topic::factory()->create();
+        $lessons = Lesson::factory()->count(20)->create([
+            'topic_id' => $topic->id,
+            'difficulty_level' => 2,
+        ]);
+        $expectedLesson = Lesson::factory()->create([
+            'topic_id' => $topic->id,
+            'difficulty_level' => 2,
+            'title' => 'Foo Bar Query',
+        ]);
+
+        // exclude this lesson from the search results
+        // by setting difficulty level to 1
+        Lesson::factory()->create([
+            'topic_id' => $topic->id,
+            'difficulty_level' => 1,
+            'title' => 'Foo Bar Query',
+        ]);
+
+        // exclude another lesson from the search results
+        // by setting topic_id to a different topic
+        Lesson::factory()->create([
+            'difficulty_level' => 2,
+            'title' => 'Foo Bar Query',
+        ]);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $topic->id,
+                'difficulty_level' => 2,
+                'query' => 'Foo Bar',
+            ]));
+
+        $response->assertOk();
+        $lessonResponse = $response->json('lessons');
+        $this->assertCount(1, $lessonResponse);
+        $this->assertEquals($expectedLesson->id, $lessonResponse[0]['id']);
     }
 
     public function test_fetches_lessons_with_growing_difficulty()
