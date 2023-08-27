@@ -50,14 +50,24 @@ class Lesson extends Model
         $direction = $params['direction'] ?? 'next';
 
         if ($direction === 'next') {
-            $createdAtOperator = $createdAtDirection === 'desc' ? '<' : '>';
+            $createdAtOperator = $createdAtDirection === 'desc' ? '<=' : '>=';
             $createdAtOrder = $createdAtDirection === 'desc' ? 'desc' : 'asc';
-            $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '<=' : '>=';
+            if (!($params['growing_difficulty'] ?? false)) {
+                $difficultyLevelOperator = '=';
+            } else {
+                $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '<=' : '>=';
+            }
         } elseif ($direction === 'prev') {
-            $createdAtOperator = $createdAtDirection === 'desc' ? '>' : '<';
+            $createdAtOperator = $createdAtDirection === 'desc' ? '>=' : '<=';
             $createdAtOrder = $createdAtDirection === 'desc' ? 'asc' : 'desc';
-            $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '>=' : '<=';
-            $difficultyLevelDirection = $difficultyLevelDirection === 'desc' ? 'asc' : 'desc';
+            if (!($params['growing_difficulty'] ?? false)) {
+                $difficultyLevelOperator = '=';
+            } else {
+                $difficultyLevelOperator = $difficultyLevelDirection === 'desc' ? '>=' : '<=';
+            }
+            $difficultyLevelDirection = 'asc';
+            // ^^ always ascending because we want to get the next
+            // record with the same difficulty level or higher/lower rather than the highest/lowest
         } else {
             throw new InvalidArgumentException('Invalid direction, must be "next" or "prev"');
         }
@@ -68,10 +78,12 @@ class Lesson extends Model
                 $currentDifficulty,
                 $createdAtOperator,
                 $difficultyLevelOperator,
+                $lesson,
             ) {
                 $query
                     ->where('created_at', $createdAtOperator, $currentCreatedAt)
-                    ->where('difficulty_level', $difficultyLevelOperator, $currentDifficulty);
+                    ->where('difficulty_level', $difficultyLevelOperator, $currentDifficulty)
+                    ->whereNot('id', $lesson->id);
             })
             ->limit(1)
             ->orderBy('difficulty_level', $difficultyLevelDirection)

@@ -216,19 +216,118 @@ class LessonControllerTest extends TestCase {
         $this->assertEquals($expectedLesson->id, $lessonResponse[0]['id']);
     }
 
-    public function test_fetches_lessons_with_growing_difficulty()
-    {
-        // create a topic
-    }
-
     public function test_single_lesson_includes_body()
     {
-        // create a topic
+        $user = User::factory()->create();
+        $lesson = Lesson::factory()->create();
+        $this->actingAs($user)
+            ->getJson(route('api.lesson.show', $lesson->id))
+            ->assertOk()
+            ->assertJson([
+                'lesson' => [
+                    'body' => $lesson->body,
+                ]
+            ]);
+        
+        $lessons = $this->actingAs($user)
+            ->getJson(route('api.lesson.index', [
+                'topic_id' => $lesson->topic_id,
+                'difficulty_level' => $lesson->difficulty_level,
+            ]))
+            ->json('lessons');
+        
+        $this->assertCount(1, $lessons);
+        $this->assertArrayNotHasKey('body', $lessons[0]);
     }
 
-    public function test_single_lesson_includes_prev_and_next_links()
+    public function test_single_lesson_includes_expected_prev_and_next_links()
     {
-        // create a topic
+        $topic = Topic::factory()->create();
+
+        $prevLesson = Lesson::factory()->create([
+            'difficulty_level' => 1,
+            'topic_id' => $topic->id,
+        ]);
+
+        $currentLesson = Lesson::factory()->create([
+            'difficulty_level' => 2,
+            'topic_id' => $topic->id,
+        ]);
+
+        $nextLesson = Lesson::factory()->create([
+            'difficulty_level' => 3,
+            'topic_id' => $topic->id,
+        ]);
+
+        $finalLesson = Lesson::factory()->create([
+            'difficulty_level' => 4,
+            'topic_id' => $topic->id,
+        ]);
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.show',[
+                'lesson_id' => $currentLesson->id,
+                'growing_difficulty' => false,
+                'topic_id' => $topic->id,
+                'difficulty_level' => 2,
+            ]));
+        
+        $response->assertOk();
+        $lessonResponse = $response->json('lesson');
+        $nextLessonUrl = $response->json('next_lesson_url');
+        $prevLessonUrl = $response->json('prev_lesson_url');
+
+        $this->assertEquals($currentLesson->id, $lessonResponse['id']);
+        $this->assertNull($prevLessonUrl);
+        $this->assertNull($nextLessonUrl);
+
+        $urlParams = [
+            'topic_id' => $topic->id,
+            'difficulty_level' => 2,
+            'lesson_id' => $currentLesson->id,
+            'growing_difficulty' => true,
+        ];
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.show', $urlParams));
+
+        $response->assertOk();
+        $lessonResponse = $response->json('lesson');
+        $nextLessonUrl = $response->json('next_lesson_url');
+        $prevLessonUrl = $response->json('prev_lesson_url');
+
+        $this->assertEquals($currentLesson->id, $lessonResponse['id']);
+        $this->assertEquals(route('api.lesson.show', array_merge($urlParams, [
+            'lesson_id' => $nextLesson->id,
+        ])), $nextLessonUrl);
+
+        $this->assertEquals(route('api.lesson.show', array_merge($urlParams, [
+            'lesson_id' => $prevLesson->id,
+        ])), $prevLessonUrl);
+
+        $urlParams = [
+            ...$urlParams,
+            'difficulty_level_direction' => 'desc'
+        ];
+
+        $response = $this->actingAs($user)
+            ->getJson(route('api.lesson.show', $urlParams));
+        
+        $response->assertOk();
+        $lessonResponse = $response->json('lesson');
+        $nextLessonUrl = $response->json('next_lesson_url');
+        $prevLessonUrl = $response->json('prev_lesson_url');
+
+        $this->assertEquals($currentLesson->id, $lessonResponse['id']);
+        $this->assertEquals(route('api.lesson.show', array_merge($urlParams, [
+            'lesson_id' => $prevLesson->id,
+        ])), $nextLessonUrl);
+
+        $this->assertEquals(route('api.lesson.show', array_merge($urlParams, [
+            'lesson_id' => $nextLesson->id,
+        ])), $prevLessonUrl);
     }
 
     public function test_lesson_adds_view_count()
